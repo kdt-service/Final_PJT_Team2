@@ -146,7 +146,7 @@ for dict_row in result_list:
     acc_name = dict_row['account_nm']
     acc_data = dict_row['thstrm_amount']
     condition = (result_df['종목코드'] == corp_code) & (result_df['사업년도'] == bsns_year) & (result_df['분기코드'] == reprt_code)
-    result_df.at[result_df.loc[condition].index, acc_name] = acc_data
+    result_df.at[result_df.loc[condition].index, acc_name] = acc_data      ### 에러 발생 위치입니다ㅠㅠ
 
 dict_row = result_list[0]
 corp_code = dict_row['corp_code']
