@@ -134,8 +134,8 @@ for dict_row in result_list:
     data_dfcol.append(dict_row['account_nm'])
 data_dfcol = list(set(data_dfcol))
 
-for data_col in data_dfcol:
-    result_df[data_col] = None
+result_df = pd.concat([result_df, pd.DataFrame(columns=data_dfcol)])
+result_df[data_dfcol] = None
 result_df = result_df.drop_duplicates().reset_index(drop=True)
 
 for dict_row in result_list:
