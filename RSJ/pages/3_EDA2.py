@@ -8,16 +8,29 @@ from bokeh.plotting import figure
 from bokeh.models import HoverTool, ColumnDataSource
 import plotly.express as px
 from datetime import datetime, timedelta
+from DB.insert_select_db import Database
+
+with open("DB/config.txt", "r") as file:
+    exec(file.read())
+
+db = Database(configs)
+
+today = datetime.now().strftime("%Y-%m-%d")
+query = f"select * FROM stock WHERE date BETWEEN '2018-01-01' AND '{today}'"
+# SQL 쿼리를 실행하여 데이터를 가져옵니다
+data, column_names = db.execute_query(query)
+
+# 데이터를 DataFrame으로 변환합니다
+df = pd.DataFrame(data, columns=column_names)
 
 def load_data(file_path):
     data = pd.read_csv(file_path)
     return data
 
 def main():
+    global df
     tab11, tab12, tab13, tab14, tab15 = st.tabs(["상관관계 분석","거래량 Top 주가 변동","거래량 변동","등락률 산점도","테스트3"])
     with tab11:
-        df = pd.read_csv('all.csv')
-
         st.title('- 변수 간 상관관계 히트맵')
         st.markdown('''
                         <div style="text-align: left; padding: 10px; background-color: #E8F0FE; border-radius: 10px; color: black;">
@@ -26,12 +39,10 @@ def main():
                         <h3 style="font-size: 14px; font-weight: normal;">   </h3>
                         </div>
                         ''', unsafe_allow_html=True)
-        
-        
 
         # 필요한 변수들 선택
-        selected_columns = ['Close', 'Volume', 'Change', 'Code', 'MA_5', 'fast_%K', 'slow_%K',
-                            'slow_%D', 'RSI', 'STD', 'Upper', 'Lower', 'fast_10', 'Score', 'pos_score', 'MA_10']
+        selected_columns = ['close', 'volume', 'stock_change', 'ma_5', 'fast_k', 'slow_k',
+                            'slow_d', 'rsi', 'std', 'upper', 'lower']
         data = df[selected_columns]
 
         # 상관계수 계산
@@ -113,14 +124,10 @@ def main():
                     st.pyplot(plt)
                 
     with tab12:
-        
-        # CSV 파일 로드
-        df = load_data('all.csv')
-
-        selected_stock = st.selectbox("- 종목을 선택해주세요.", df['Name'].unique())
+        selected_stock = st.selectbox("- 종목을 선택해주세요.", df['company_name'].unique())
 
         # 선택한 종목의 데이터 필터링
-        filtered_df = df[df['Name'] == selected_stock]
+        filtered_df = df[df['company_name'] == selected_stock]
         
         st.markdown('<p style="font-size: 24px; font-weight: bold; color: #336699;">- 거래량과 주가의 관계</p>', unsafe_allow_html=True)
         st.markdown('<p style="font-size: 18px;">거래량이 증가하면 주가도 상승하는 경향이 있습니다.</p>', unsafe_allow_html=True)
@@ -137,28 +144,28 @@ def main():
             st.write(f"- {selected_stock} 종목의 가장 높은 거래량 Top 5의 주가 변화")
 
             # 가장 높은 Volume 종목 Top 5
-            top_5_stocks = filtered_df.sort_values('Volume', ascending=False).head(5)
+            top_5_stocks = filtered_df.sort_values('volume', ascending=False).head(5)
 
             for days in [30, 60, 90, 365]:
                 top_5_stocks[f'Price {days} Days Later'] = None
                 for i, row in top_5_stocks.iterrows():
-                    target_date = pd.to_datetime(row['Date']) + pd.DateOffset(days=days)  # 날짜를 날짜 형식으로 변환
+                    target_date = pd.to_datetime(row['date']) + pd.DateOffset(days=days)  # 날짜를 날짜 형식으로 변환
                     target_date_str = target_date.strftime('%Y-%m-%d')  # 날짜를 문자열로 변환
-                    closest_date = filtered_df.loc[filtered_df['Date'] >= target_date_str, 'Date'].min()
+                    closest_date = filtered_df.loc[filtered_df['date'] >= target_date_str, 'date'].min()
                     if pd.notnull(closest_date):
-                        closest_date_price = filtered_df.loc[filtered_df['Date'] == closest_date, 'Close'].iloc[0]
+                        closest_date_price = filtered_df.loc[filtered_df['date'] == closest_date, 'close'].iloc[0]
                         top_5_stocks.loc[i, f'Price {days} Days Later'] = closest_date_price
 
-            st.dataframe(top_5_stocks[['Date', 'Volume', 'Close'] + [f'Price {days} Days Later' for days in [30, 60, 90, 365]]])
+            st.dataframe(top_5_stocks[['date', 'volume', 'close'] + [f'Price {days} Days Later' for days in [30, 60, 90, 365]]])
             
             
             st.write(f"- {selected_stock} 종목의 30, 60, 90, 365일 뒤의 종가 변화")
             fig = go.Figure()
 
             for index, row in top_5_stocks.iterrows():
-                volume = row['Volume']
+                volume = row['volume']
                 price_values = [row[f'Price {days} Days Later'] for days in [30, 60, 90, 365]]
-                fig.add_trace(go.Scatter(x=[30, 60, 90, 365], y=price_values, mode='lines', name=f'Volume: {volume}'))
+                fig.add_trace(go.Scatter(x=[30, 60, 90, 365], y=price_values, mode='lines', name=f'volume: {volume}'))
 
             fig.update_layout(xaxis_title="Days Later", yaxis_title="Price")
             #타이틀 설정
@@ -226,7 +233,7 @@ def main():
     
     with tab13:
             #(3) 날짜 별, 연도 별 거래량 그래프 확인. ()
-        df = pd.read_csv('all.csv')
+        available_names = df['company_name'].unique()
         st.markdown('''
                         <div style="text-align: left; padding: 10px; background-color: #E8F0FE; border-radius: 10px; color: black;">
                         <h3 style="font-size: 16px; font-weight: normal;"> 거래량은 시장의 활발성을 나타냅니다. 얼마나 활발하게 거래되는지 나타냅니다.  </h3>
@@ -234,40 +241,39 @@ def main():
                         <h3 style="font-size: 16px; font-weight: normal;"> 기술적 지표에 자주 쓰이는 중요한 지표입니다.  </h3>
                         </div>
                         ''', unsafe_allow_html=True)
-        available_names = df['Name'].unique()
 
         # 멀티셀렉트 박스로 종목명 선택
         selected_names = st.multiselect('Select Names', available_names)
 
         # 선택한 종목명에 해당하는 데이터 필터링
-        filtered_df = df[df['Name'].isin(selected_names)] if selected_names else df
+        filtered_df = df[df['company_name'].isin(selected_names)] if selected_names else df
 
         # 날짜를 datetime 형식으로 변환
-        filtered_df['Date'] = pd.to_datetime(filtered_df['Date'])
+        filtered_df['date'] = pd.to_datetime(filtered_df['date'])
 
         # 사용자가 선택한 날짜 범위
-        min_date = filtered_df['Date'].min().date()
-        max_date = filtered_df['Date'].max().date()
+        min_date = filtered_df['date'].min().date()
+        max_date = filtered_df['date'].max().date()
         start_date = st.date_input('Start Date', min_value=min_date, max_value=max_date, value=min_date)
         end_date = st.date_input('End Date', min_value=min_date, max_value=max_date, value=max_date)
 
         # 날짜 범위에 따른 데이터 필터링
         start_date = datetime(start_date.year, start_date.month, start_date.day)
         end_date = datetime(end_date.year, end_date.month, end_date.day)
-        filtered_df = filtered_df[(filtered_df['Date'] >= start_date) & (filtered_df['Date'] <= end_date)]
+        filtered_df = filtered_df[(filtered_df['date'] >= start_date) & (filtered_df['date'] <= end_date)]
 
         # 날짜 별 거래량 그래프
-        fig1 = px.line(filtered_df, x='Date', y='Volume', color='Name',
-                        title='Volume by Date', labels={'Volume': 'Volume', 'Date': 'Date'})
+        fig1 = px.line(filtered_df, x='date', y='volume', color='company_name',
+                        title='Volume by Date', labels={'volume': 'volume', 'date': 'date'})
         fig1.update_traces(hovertemplate='Date: %{x}<br>Volume: %{y}')
         
         
 
         # 연도 별 거래량 그래프
-        filtered_df['Year'] = filtered_df['Date'].dt.year
-        yearly_volumes = filtered_df.groupby(['Year', 'Name'])['Volume'].sum().reset_index()
-        fig2 = px.bar(yearly_volumes, x='Year', y='Volume', color='Name',
-                        title='년도별 거래량 추이', labels={'Volume': 'Volume', 'Year': 'Year'})
+        filtered_df['Year'] = filtered_df['date'].dt.year
+        yearly_volumes = filtered_df.groupby(['Year', 'company_name'])['volume'].sum().reset_index()
+        fig2 = px.bar(yearly_volumes, x='Year', y='volume', color='company_name',
+                        title='년도별 거래량 추이', labels={'volume': 'volume', 'year': 'year'})
         fig2.update_traces(hovertemplate='Year: %{x}<br>Volume: %{y}')
 
         fig1.update_layout(width=1000, height=600)
@@ -280,7 +286,6 @@ def main():
 
         
         with tab14:
-            
 
             # 등락률과 날짜 데이터 추출
             #change = df['Change']
@@ -288,43 +293,43 @@ def main():
             st.markdown('''
                         <div style="text-align: left; padding: 10px; background-color: #E8F0FE; border-radius: 10px; color: black;">
                         <h3 style="font-size: 16px; font-weight: normal;"> 주식의 변동성을 파악하는 지표입니다.   </h3>
-                        <h3 style="font-size: 16px; font-weight: normal;"> 패턴을 분석하여 향후 주가 움직임을 예측하고, 투자 전략을 세울 수 있습니다.  </h3>
+                        <h3 style="font-size: 16px; font-weight: normal;"> 패턴(긍정, 부정)을 분석하여 향후 주가 움직임을 예측하고, 투자 전략을 세울 수 있습니다.  </h3>
                         <h3 style="font-size: 16px; font-weight: normal;"> 리스크와 수익의 관계를 분석하는 데 활용될 수 있습니다  </h3>
                         <h3 style="font-size: 16px; font-weight: normal;"> 보다 높은 등락률을 가진 주식은 일반적으로 더 높은 수익을 제공할 수 있지만, 동시에 더 큰 리스크도 내포하고 있습니다.  </h3>
                         </div>
                         ''', unsafe_allow_html=True)
             
             # 종목명 선택을 위한 드롭다운 메뉴
-            selected_name = st.selectbox('종목명 선택', df['Name'].unique())
+            selected_name = st.selectbox('종목명 선택', df['company_name'].unique())
 
             # 기본값 설정
-            default_start_date = pd.to_datetime(df['Date']).min().to_pydatetime().date()
+            default_start_date = pd.to_datetime(df['date']).min().to_pydatetime().date()
             start_date = st.date_input('Start Date', value=default_start_date)
             end_date = st.date_input('End Date', value=datetime.now().date())
             start_date = start_date.strftime('%Y-%m-%d')
             end_date = end_date.strftime('%Y-%m-%d')
 
             # 선택된 종목명과 날짜에 해당하는 데이터 추출
-            selected_data = df[(df['Name'] == selected_name) & (df['Date'] >= start_date) & (df['Date'] <= end_date)]
+            selected_data = df[(df['company_name'] == selected_name) & (df['date'] >= start_date) & (df['date'] <= end_date)]
 
             # 그래프 생성
             fig = go.Figure()
 
             # 선택된 종목명과 날짜에 해당하는 등락률 산점도 추가
-            positive_changes = selected_data[selected_data['Change'] > 0]
+            positive_changes = selected_data[selected_data['stock_change'] > 0]
             fig.add_trace(go.Scatter(
-                x=positive_changes['Date'],
-                y=positive_changes['Change'],
+                x=positive_changes['date'],
+                y=positive_changes['stock_change'],
                 mode='markers',
                 marker=dict(color='red', size=8),
                 name='Positive Changes'
             ))
             
             # 음수 등락률 산점도 추가
-            negative_changes = selected_data[selected_data['Change'] < 0]
+            negative_changes = selected_data[selected_data['stock_change'] < 0]
             fig.add_trace(go.Scatter(
-                x=negative_changes['Date'],
-                y=negative_changes['Change'],
+                x=negative_changes['date'],
+                y=negative_changes['stock_change'],
                 mode='markers',
                 marker=dict(color='blue', size=8),
                 name='Negative Changes'
@@ -357,6 +362,7 @@ def main():
                 'Count': [positive_count, negative_count],
                 'Ratio': [positive_ratio, negative_ratio]
             })
+            st.dataframe(ratio_data)
 
 if __name__ == '__main__':
     main()
